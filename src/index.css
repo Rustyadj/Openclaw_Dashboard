@@ -1,0 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    
+    --radius-lg: var(--radius);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-sm: calc(var(--radius) - 4px);
+}
+
+:root {
+    --background: #27272a; /* Zinc 800 - Noticeably gray */
+    --foreground: #f4f4f5;
+    --card: #1c1c1f; /* Slightly darker than background for depth or lighter? Let's go lighter: #3f3f46 (Zinc 700) */
+    --card: #3f3f46;
+    --card-foreground: #f4f4f5;
+    --popover: #27272a;
+    --popover-foreground: #f4f4f5;
+    --primary: #10b981; /* Emerald 500 */
+    --primary-foreground: #27272a;
+    --secondary: #52525b; /* Zinc 600 */
+    --secondary-foreground: #f4f4f5;
+    --muted: #3f3f46; /* Zinc 700 */
+    --muted-foreground: #d4d4d8;
+    --accent: #52525b;
+    --accent-foreground: #f4f4f5;
+    --destructive: #ef4444;
+    --destructive-foreground: #f4f4f5;
+    --border: #52525b; /* Zinc 600 */
+    --input: #52525b;
+    --ring: #10b981;
+    --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+.geometric-grid {
+  background-image: radial-gradient(#3f3f46 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.glass-header {
+  @apply bg-background/50 backdrop-blur-md border-b border-border;
+}
+
+.terminal-panel {
+  @apply bg-background border border-border font-mono;
+}
