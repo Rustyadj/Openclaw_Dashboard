@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  openclaw:
+    build: .
+    container_name: openclaw
+    restart: unless-stopped
+
+    # Full host access
+    privileged: true
+    network_mode: host          # shares the VPS network stack directly
+    pid: host                   # shares the host PID namespace
+
+    volumes:
+      # Docker socket — lets the container manage other containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Full host filesystem read/write
+      - /:/host
+      # Persistent app data
+      - openclaw_data:/app/data
+
+    environment:
+      - VITE_API_BASE_URL=http://187.124.66.30:18789
+      - VITE_APP_NAME=OpenClaw Command Center
+      - VITE_ALLOW_DEMO_AUTH=true
+
+    # With network_mode: host the container listens on the VPS port directly
+    # Port 80 on the VPS == port 80 in the container
+    # Change to any free port below if needed:
+    # ports:
+    #   - "80:80"
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  openclaw_data:
