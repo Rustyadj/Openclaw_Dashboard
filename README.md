@@ -2,6 +2,16 @@
 
 Glassmorphism React/Vite dashboard shell for OpenClaw.
 
+## Current launch status
+
+| # | Area | Status | Notes |
+|---|------|--------|-------|
+| 1 | Replace mock datasets with real gateway/domain data | In progress | Zustand stores and typed API clients are wired for agents, chat, memory, workflows, documents, org, metrics, terminal, and settings. Local fallback data remains for offline/demo mode until the VPS wrapper routes are restarted and verified. |
+| 2 | Finalize authentication policy | Done for current deployment | `VITE_AUTH_MODE=openclaw` is the default hosted policy. Firebase remains available for standalone deployments; `demo` is local-preview only. |
+| 3 | Add loading, empty, and error states | In progress | Shared `useAsync`, `LoadingSpinner`, and `ErrorMessage` exist and are used by core async panels. Continue expanding empty states as each backend route moves from fallback to live data. |
+| 4 | Profile performance with realistic payload sizes | Baseline complete | Routes are lazy-loaded with `React.lazy`/`Suspense`; latest production build splits pages into separate chunks and keeps the entry bundle under ~90 kB gzip. Full runtime profiling still needs real gateway payloads. |
+| 5 | Refine mobile layouts for individual pages | In progress | Shell-level mobile navigation is in place. Dense desktop pages still need per-panel responsive tuning after live data shapes stabilize. |
+
 ## What changed before shipping
 
 - Added a real gateway API integration point (`VITE_API_BASE_URL`) with live status polling.
@@ -10,16 +20,14 @@ Glassmorphism React/Vite dashboard shell for OpenClaw.
 - Added a demo-auth escape hatch for local previews only (`VITE_AUTH_MODE=demo`).
 - Added mobile nav handling so the shell is usable on smaller screens instead of instantly breaking.
 - Fixed package compatibility by pinning React 18 so installs/builds work with the current dependency tree.
+- Added Zustand-backed domain stores for agents, workflows, memory, org, settings, documents, and chat.
+- Added typed API wrappers in `src/lib/api.ts` for the backend route contract.
+- Added reusable async UI primitives: `useAsync`, `LoadingSpinner`, and `ErrorMessage`.
+- Added route-level code splitting via `React.lazy` and `Suspense`.
 
-## Still not fully production-ready
+## Open PR note
 
-This repo is now in a safer state, but you still need to finish these before a real launch:
-
-1. Replace page-level mock datasets with real gateway/domain data.
-2. Decide and implement the exact auth policy (Google-only, email/password, org SSO, etc.).
-3. Add route/page-level loading, empty, and error states inside major feature panels.
-4. Profile the heavy dashboard/workflow/metrics pages with real payload sizes.
-5. Tighten mobile layouts inside individual pages — the shell is responsive now, but many dense desktop panels still need layout work.
+There is one old PR branch, but it is **not** a package-lock-only change. It includes Docker/VPS access files, CLAUDE.md, a design pipeline page, dark-theme redesigns, and broad UI edits. Do not merge it blindly into `main`; cherry-pick intentionally if any piece is still wanted.
 
 ## Setup
 
@@ -62,6 +70,7 @@ VITE_AUTH_MODE=demo
 
 ## Notes
 
-- The dashboard now tries `/health` and `/status` on the configured gateway base URL.
-- If those endpoints differ in your backend, update `src/lib/api.ts`.
+- The dashboard tries `/health` and `/status` on the configured gateway base URL.
+- In OpenClaw-hosted mode, the API client uses same-origin requests.
+- The frontend API contract lives in `src/lib/api.ts`; backend routes should match those shapes instead of changing the client casually.
 - When served by OpenClaw, auth mode should be `openclaw` so the app does not block behind a second auth wall.
