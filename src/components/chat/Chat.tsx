@@ -1,290 +1,211 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { chatApi } from '../../lib/api';
+import { useCommandStore } from '../../stores/useCommandStore';
+import { ErrorMessage, LoadingSpinner } from '../ui/AsyncState';
+import { Eyebrow, GlassCard, PageShell, PrimaryButton, SecondaryButton, Segmented, SectionHeader } from '../ui/premium';
 
-type Message = { id: string; role: 'user' | 'ai'; content: string; time: string; agent?: string };
-
-const INITIAL: Message[] = [
-  { id: '1', role: 'ai',   content: 'Hello Rusty. I\'m ready. You have 3 active agents and 14 skills loaded. What would you like to accomplish today?', time: '9:00 AM', agent: 'Orchestrator' },
-  { id: '2', role: 'user', content: 'Give me a summary of pending beta attorney follow-ups.', time: '9:01 AM' },
-  { id: '3', role: 'ai',   content: 'You have two attorneys pending outreach:\n\n**James Holloway** — Trial lawyer, Texas. Expressed interest in contract review automation. Last contact Apr 22. Suggest scheduling a demo this week.\n\n**Patricia Cruz** — Family law, 8 attorneys. Demo scheduled May 2. She sent the intake form on Apr 24 — needs your review before the call.\n\nWant me to draft follow-up messages for both?', time: '9:01 AM', agent: 'Orchestrator' },
+const threads = [
+  { name: 'Board Strategy', type: 'Board', active: true, unread: 0 },
+  { name: 'Legal Intake', type: 'Project', active: false, unread: 4 },
+  { name: 'Personal Ops', type: 'Private', active: false, unread: 1 },
+  { name: 'Agent Room', type: 'AI-only', active: false, unread: 2 },
 ];
 
-const AGENTS = ['Orchestrator', 'LawAssist', 'DataAgent'];
-const MODELS = ['claude-sonnet-4-6', 'gemini-flash-3', 'deepseek-r1-0528', 'gpt-4o'];
+const folders = [
+  { name: 'Executive', count: 12 },
+  { name: 'Client Ops', count: 8 },
+  { name: 'Growth', count: 5 },
+];
+
+const agents = ['Orchestrator', 'Strategy Lead', 'Legal Ops', 'Research Agent'];
+const models = ['Claude Sonnet 4.6', 'ChatGPT 5.4', 'Gemini 2.5 Pro', 'DeepSeek V3.2', 'openai-codex/gpt-5.5'];
+const memoryScopes = ['Project', 'Organization', 'Personal', 'Global'];
 
 export default function Chat() {
-  const [messages, setMessages] = useState<Message[]>(INITIAL);
-  const [input, setInput] = useState('');
-  const [agent, setAgent] = useState('Orchestrator');
-  const [model, setModel] = useState('claude-sonnet-4-6');
-  const [memoryScope, setMemoryScope] = useState('Global');
+  const messages = useCommandStore(state => state.chat.messages);
+  const addChatMessage = useCommandStore(state => state.addChatMessage);
+  const updateChatMessage = useCommandStore(state => state.updateChatMessage);
+  const upsertMemory = useCommandStore(state => state.upsertMemory);
+  const logActivity = useCommandStore(state => state.logActivity);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [thread, setThread] = useState(threads[0].name);
+  const [agent, setAgent] = useState(agents[0]);
+  const [model, setModel] = useState(models[0]);
+  const [memoryScope, setMemoryScope] = useState(memoryScopes[1]);
+  const [composerMode, setComposerMode] = useState('Chat');
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  const visibleMessages = useMemo(() => messages.filter(message => !message.threadId || message.threadId === thread), [messages, thread]);
 
-  const send = () => {
-    if (!input.trim()) return;
-    const newMsg: Message = { id: Date.now().toString(), role: 'user', content: input, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
-    setMessages(m => [...m, newMsg]);
-    setInput('');
-    // Simulate reply
-    setTimeout(() => {
-      setMessages(m => [...m, {
-        id: (Date.now() + 1).toString(),
-        role: 'ai',
-        content: 'Got it. Processing your request now...',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        agent,
-      }]);
-    }, 800);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [visibleMessages, sending]);
+
+  const chips = useMemo(() => [
+    { label: agent, tone: 'tag-accent' },
+    { label: model, tone: 'tag-blue' },
+    { label: `${memoryScope} memory`, tone: 'tag-violet' },
+  ], [agent, model, memoryScope]);
+
+  const send = async () => {
+    const text = draft.trim();
+    if (!text || sending) return;
+    const now = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const userMessage = { id: `${Date.now()}-u`, role: 'user' as const, author: 'Rusty', time: now, text, threadId: thread, agent, model, memoryScope };
+    const pendingId = `${Date.now()}-a`;
+    addChatMessage(userMessage);
+    addChatMessage({ id: pendingId, role: 'assistant', author: agent, time: now, text: 'Routing to agent backend…', threadId: thread, agent, model, memoryScope });
+    setDraft('');
+    setSending(true);
+    setError(null);
+    try {
+      const response = await chatApi.send({ threadId: thread, message: text, agent, model, memoryScope, history: visibleMessages });
+      updateChatMessage(pendingId, response.message);
+      response.memory?.forEach(upsertMemory);
+      logActivity(`${agent} answered in ${thread}`);
+    } catch (err) {
+      const normalized = err instanceof Error ? err : new Error(String(err));
+      setError(normalized);
+      updateChatMessage(pendingId, { text: `Backend error: ${normalized.message}` });
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '300px minmax(0,1fr) 300px', height: '100%', overflow: 'hidden' }}>
+      <div style={{ padding: 18, borderRight: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.28)', display: 'grid', gap: 16, overflowY: 'auto' }}>
+        <GlassCard>
+          <SectionHeader title="Chat workspace" subtitle="Project folders and conversation spaces" action={<PrimaryButton style={{ padding: '8px 12px' }}>+ New</PrimaryButton>} />
+          <div style={{ display: 'grid', gap: 10 }}>
+            {folders.map(folder => (
+              <div key={folder.name} style={{ padding: '12px 14px', borderRadius: 16, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{folder.name}</div>
+                <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted)' }}>{folder.count} active conversations</div>
+              </div>
+            ))}
+          </div>
+        </GlassCard>
 
-      {/* Chat main */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <GlassCard>
+          <Eyebrow>Threads</Eyebrow>
+          <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+            {threads.map(item => (
+              <button key={item.name} onClick={() => setThread(item.name)} style={{ textAlign: 'left', padding: '12px 14px', borderRadius: 16, border: thread === item.name ? '1px solid rgba(0,230,168,0.3)' : '1px solid rgba(255,255,255,0.08)', background: thread === item.name ? 'rgba(0,230,168,0.11)' : 'rgba(255,255,255,0.04)', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: thread === item.name ? 'var(--accent-dark)' : 'var(--text-primary)' }}>{item.name}</span>
+                  {!!item.unread && <span className="tag tag-accent">{item.unread}</span>}
+                </div>
+                <div style={{ marginTop: 5, fontSize: 11, color: 'var(--text-muted)' }}>{item.type}</div>
+              </button>
+            ))}
+          </div>
+        </GlassCard>
+      </div>
 
-        {/* Toolbar */}
-        <div style={{
-          padding: '10px 20px',
-          borderBottom: '1px solid rgba(0,0,0,0.06)',
-          display: 'flex', alignItems: 'center', gap: 8,
-          background: 'rgba(255,255,255,0.4)',
-          backdropFilter: 'blur(12px)',
-        }}>
-          {/* Agent selector */}
-          <SelectorPill
-            label="Agent"
-            value={agent}
-            options={AGENTS}
-            onChange={setAgent}
-            icon="◎"
-            accent="#00E6A8"
-          />
-          <SelectorPill
-            label="Model"
-            value={model}
-            options={MODELS}
-            onChange={setModel}
-            icon="⚡"
-            accent="#3B82F6"
-          />
-          <SelectorPill
-            label="Memory"
-            value={memoryScope}
-            options={['Global', 'Org', 'Personal', 'Session']}
-            onChange={setMemoryScope}
-            icon="◫"
-            accent="#8B5CF6"
-          />
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-            <span className="tag tag-green" style={{ fontSize: 10 }}>
-              <span className="status-dot online" style={{ width: 5, height: 5 }} />
-              Connected
-            </span>
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        <div className="glass" style={{ margin: 18, borderRadius: 24, padding: 16, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text-primary)' }}>{thread}</div>
+            <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>Polished conversation surface with agents, model routing, uploads, and voice context</div>
+          </div>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {chips.map(chip => <span key={chip.label} className={`tag ${chip.tone}`}>{chip.label}</span>)}
           </div>
         </div>
 
-        {/* Messages */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {messages.map(m => (
-            <div key={m.id} style={{
-              display: 'flex',
-              flexDirection: m.role === 'user' ? 'row-reverse' : 'row',
-              gap: 10, alignItems: 'flex-end',
-            }}>
-              {/* Avatar */}
-              {m.role === 'ai' && (
-                <div style={{
-                  width: 30, height: 30, borderRadius: 9,
-                  background: 'linear-gradient(135deg, #00E6A8, #3B82F6)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 12, color: '#fff', fontWeight: 700, flexShrink: 0,
-                  boxShadow: '0 2px 8px rgba(0,230,168,0.3)',
-                }}>◎</div>
-              )}
-
-              {/* Bubble */}
-              <div style={{ maxWidth: '68%' }}>
-                {m.role === 'ai' && (
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, paddingLeft: 2 }}>
-                    {m.agent} · {m.time}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 24px 12px', display: 'grid', gap: 16 }}>
+          {visibleMessages.map(message => (
+            <div key={message.id} style={{ display: 'flex', justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start' }}>
+              <div style={{ width: 'min(760px, 92%)', display: 'grid', gridTemplateColumns: message.role === 'user' ? '1fr' : '44px 1fr', gap: 12 }}>
+                {message.role === 'assistant' && (
+                  <div style={{ width: 44, height: 44, borderRadius: 16, background: 'linear-gradient(135deg, rgba(0,230,168,0.18), rgba(96,165,250,0.18))', border: '1px solid rgba(255,255,255,0.12)', display: 'grid', placeItems: 'center', color: 'var(--accent-dark)', fontWeight: 800 }}>AI</div>
+                )}
+                <div style={{ justifySelf: message.role === 'user' ? 'end' : 'stretch' }}>
+                  <div style={{ marginBottom: 6, display: 'flex', gap: 8, justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start', fontSize: 11, color: 'var(--text-muted)' }}>
+                    <span>{message.author}</span>
+                    <span>{message.time}</span>
                   </div>
-                )}
-                <div style={{
-                  padding: '12px 16px',
-                  borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                  background: m.role === 'user'
-                    ? 'linear-gradient(135deg, #00E6A8, #00C494)'
-                    : 'var(--glass-bg-strong)',
-                  backdropFilter: m.role === 'ai' ? 'blur(16px)' : undefined,
-                  border: m.role === 'ai' ? '1px solid rgba(0,0,0,0.07)' : 'none',
-                  boxShadow: m.role === 'user'
-                    ? '0 4px 14px rgba(0,230,168,0.3)'
-                    : 'var(--glass-shadow)',
-                  color: m.role === 'user' ? '#fff' : 'var(--text-primary)',
-                  fontSize: 13,
-                  lineHeight: 1.6,
-                  whiteSpace: 'pre-wrap',
-                }}>
-                  {m.content.split('\n').map((line, i) => {
-                    if (line.startsWith('**') && line.endsWith('**')) {
-                      return <div key={i} style={{ fontWeight: 700, marginTop: i > 0 ? 8 : 0 }}>{line.slice(2, -2)}</div>;
-                    }
-                    return <div key={i}>{line}</div>;
-                  })}
+                  <div className={message.role === 'assistant' ? 'glass-card' : ''} style={{
+                    padding: '16px 18px',
+                    borderRadius: 22,
+                    background: message.role === 'assistant' ? undefined : 'linear-gradient(135deg, rgba(0,230,168,0.94), rgba(0,196,148,0.88))',
+                    color: message.role === 'assistant' ? 'var(--text-primary)' : '#03281d',
+                    boxShadow: message.role === 'assistant' ? undefined : '0 12px 28px rgba(0,230,168,0.22)',
+                    fontSize: 14,
+                    lineHeight: 1.75,
+                  }}>
+                    {message.text}
+                  </div>
                 </div>
-                {m.role === 'user' && (
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, textAlign: 'right', paddingRight: 2 }}>{m.time}</div>
-                )}
               </div>
             </div>
           ))}
+          {sending && <LoadingSpinner label="Agent is working…" />}
+          <ErrorMessage error={error} />
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
-        <div style={{
-          padding: '14px 20px',
-          borderTop: '1px solid rgba(0,0,0,0.06)',
-          background: 'rgba(255,255,255,0.4)',
-          backdropFilter: 'blur(12px)',
-        }}>
-          <div style={{
-            display: 'flex', gap: 10, alignItems: 'flex-end',
-            background: 'var(--glass-bg-strong)',
-            border: '1px solid rgba(0,0,0,0.08)',
-            borderRadius: 14, padding: '10px 10px 10px 16px',
-            boxShadow: 'var(--glass-shadow)',
-          }}>
-            {/* File upload */}
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'var(--text-muted)', padding: '6px 2px', lineHeight: 1 }}>⊕</button>
-
-            <textarea
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder="Message your agent... (Enter to send, Shift+Enter for newline)"
-              rows={1}
-              style={{
-                flex: 1, background: 'none', border: 'none',
-                resize: 'none', fontSize: 13, color: 'var(--text-primary)',
-                lineHeight: 1.6, padding: '4px 0', maxHeight: 120, overflowY: 'auto',
-              }}
-            />
-
-            {/* Voice */}
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'var(--text-muted)', padding: '6px 2px' }}>🎙</button>
-
-            {/* Send */}
-            <button
-              onClick={send}
-              disabled={!input.trim()}
-              style={{
-                background: input.trim() ? 'linear-gradient(135deg, #00E6A8, #00C494)' : 'rgba(0,0,0,0.08)',
-                border: 'none', borderRadius: 10, padding: '8px 14px',
-                color: input.trim() ? '#fff' : 'var(--text-muted)',
-                cursor: input.trim() ? 'pointer' : 'default',
-                fontFamily: "'Outfit', sans-serif",
-                fontSize: 12, fontWeight: 700,
-                transition: 'all 0.15s',
-                boxShadow: input.trim() ? '0 3px 10px rgba(0,230,168,0.3)' : 'none',
-              }}
-            >↑ Send</button>
-          </div>
+        <div style={{ padding: '0 24px 24px' }}>
+          <GlassCard strong style={{ padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+              <Segmented options={['Chat', 'Voice', 'Files']} value={composerMode} onChange={setComposerMode} />
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Select label="Agent" value={agent} options={agents} onChange={setAgent} />
+                <Select label="Model" value={model} options={models} onChange={setModel} />
+                <Select label="Memory" value={memoryScope} options={memoryScopes} onChange={setMemoryScope} />
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: 10, alignItems: 'end' }}>
+              <SecondaryButton style={{ height: 46 }}>＋ Files</SecondaryButton>
+              <textarea value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Message your workspace. Ask for summaries, create tasks, spin up projects, or route work to agents..." rows={3} style={{ width: '100%', minHeight: 46, borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.045)', color: 'var(--text-primary)', padding: '12px 14px', resize: 'none', lineHeight: 1.6 }} />
+              <SecondaryButton style={{ height: 46 }}>🎙 Voice</SecondaryButton>
+              <PrimaryButton style={{ height: 46 }} onClick={send}>{sending ? 'Sending…' : 'Send'}</PrimaryButton>
+            </div>
+          </GlassCard>
         </div>
       </div>
 
-      {/* Right panel - chat context */}
-      <div style={{
-        width: 260,
-        borderLeft: '1px solid rgba(0,0,0,0.06)',
-        background: 'rgba(255,255,255,0.3)',
-        backdropFilter: 'blur(16px)',
-        display: 'flex', flexDirection: 'column',
-        padding: 16, gap: 14, overflowY: 'auto',
-      }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Context</div>
-
-        {/* Active agent card */}
-        <div className="glass-card" style={{ padding: '12px 14px' }}>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6 }}>ACTIVE AGENT</div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, #00E6A8, #3B82F6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#fff', fontWeight: 700 }}>◎</div>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{agent}</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>{model}</div>
-            </div>
+      <div style={{ padding: 18, borderLeft: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.28)', display: 'grid', gap: 16, overflowY: 'auto' }}>
+        <GlassCard>
+          <SectionHeader title="Context controls" subtitle="Agent + memory orchestration" />
+          <div style={{ display: 'grid', gap: 12 }}>
+            <ContextRow label="Selected agent" value={agent} />
+            <ContextRow label="Model route" value={model} />
+            <ContextRow label="Memory scope" value={memoryScope} />
+            <ContextRow label="Voice status" value="Ready" tone="var(--status-green)" />
           </div>
-          <div style={{ marginTop: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
-              <span style={{ color: 'var(--text-muted)' }}>Context</span>
-              <span style={{ color: 'var(--accent-dark)', fontWeight: 600 }}>34%</span>
-            </div>
-            <div style={{ height: 4, background: 'rgba(0,0,0,0.07)', borderRadius: 99 }}>
-              <div style={{ height: '100%', width: '34%', background: 'var(--accent)', borderRadius: 99 }} />
-            </div>
+        </GlassCard>
+
+        <GlassCard>
+          <Eyebrow>Suggested tools</Eyebrow>
+          <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
+            {['Search docs', 'Create task', 'Start meeting mode', 'Summarize thread'].map(tool => (
+              <button key={tool} style={{ textAlign: 'left', padding: '12px 14px', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600 }}>{tool}</button>
+            ))}
           </div>
-        </div>
-
-        {/* Memory scope */}
-        <div className="glass-card" style={{ padding: '12px 14px' }}>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8 }}>MEMORY SCOPE</div>
-          {['Global', 'Org', 'Personal', 'Session'].map(s => (
-            <div key={s} onClick={() => setMemoryScope(s)} style={{
-              display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0',
-              cursor: 'pointer', borderBottom: '1px solid rgba(0,0,0,0.04)',
-            }}>
-              <div style={{
-                width: 14, height: 14, borderRadius: '50%',
-                border: `2px solid ${memoryScope === s ? 'var(--accent)' : 'rgba(0,0,0,0.15)'}`,
-                background: memoryScope === s ? 'var(--accent)' : 'transparent',
-                transition: 'all 0.15s',
-              }} />
-              <span style={{ fontSize: 12, color: memoryScope === s ? 'var(--accent-dark)' : 'var(--text-secondary)', fontWeight: memoryScope === s ? 600 : 400 }}>{s}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Skills active */}
-        <div>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase' }}>Active Skills</div>
-          {['Tavily Search', 'PollyReach', 'Memory Summarizer'].map(s => (
-            <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 0' }}>
-              <span className="status-dot online" style={{ width: 5, height: 5 }} />
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{s}</span>
-            </div>
-          ))}
-        </div>
+        </GlassCard>
       </div>
     </div>
   );
 }
 
-function SelectorPill({ label, value, options, onChange, icon, accent }: {
-  label: string; value: string; options: string[];
-  onChange: (v: string) => void; icon: string; accent: string;
-}) {
+function Select({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6,
-      background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(0,0,0,0.07)',
-      borderRadius: 8, padding: '5px 10px', cursor: 'pointer',
-    }}>
-      <span style={{ fontSize: 13, color: accent }}>{icon}</span>
-      <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        style={{
-          background: 'none', border: 'none', fontSize: 12,
-          fontWeight: 600, color: 'var(--text-primary)',
-          fontFamily: "'Outfit', sans-serif", cursor: 'pointer',
-        }}
-      >
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
+    <label style={{ display: 'grid', gap: 4 }}>
+      <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</span>
+      <select value={value} onChange={e => onChange(e.target.value)} style={{ minWidth: 140, height: 40, borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.045)', color: 'var(--text-primary)', padding: '0 12px' }}>
+        {options.map(option => <option key={option}>{option}</option>)}
       </select>
+    </label>
+  );
+}
+
+function ContextRow({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: tone || 'var(--text-primary)' }}>{value}</span>
     </div>
   );
 }

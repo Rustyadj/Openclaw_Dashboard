@@ -1,22 +1,26 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import './styles/globals.css';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
-import Dashboard from './components/dashboard/Dashboard';
-import Chat from './components/chat/Chat';
-import Organization from './components/org/Organization';
-import Agents from './components/agents/Agents';
-import Capabilities from './components/capabilities/Capabilities';
-import { WorkflowsEnhanced } from './components/workflows/WorkflowsEnhanced';
-import { MemoryVaultEnhanced } from './components/memory/MemoryVaultEnhanced';
-import { Documents, Terminal } from './components/pages';
-import { MetricsEnhanced } from './components/metrics/MetricsEnhanced';
-import Settings from './components/settings/Settings';
-import PersonalWorkspace from './components/workspace/PersonalWorkspace';
+import { LoadingSpinner } from './components/ui/AsyncState';
 import { SearchModal, NotificationsPanel } from './components/ui/SearchAndNotifications';
 import { fetchGatewaySummary, type GatewaySummary } from './lib/api';
 import { ConnectionBanner } from './components/system/ConnectionBanner';
 import { useAuth } from './context/AuthContext';
+import { appConfig } from './lib/config';
+
+const Dashboard = lazy(() => import('./components/dashboard/Dashboard'));
+const Chat = lazy(() => import('./components/chat/Chat'));
+const Organization = lazy(() => import('./components/org/Organization'));
+const Agents = lazy(() => import('./components/agents/Agents'));
+const Capabilities = lazy(() => import('./components/capabilities/Capabilities'));
+const WorkflowsEnhanced = lazy(() => import('./components/workflows/WorkflowsEnhanced').then(module => ({ default: module.WorkflowsEnhanced })));
+const MemoryVaultEnhanced = lazy(() => import('./components/memory/MemoryVaultEnhanced').then(module => ({ default: module.MemoryVaultEnhanced })));
+const Documents = lazy(() => import('./components/pages').then(module => ({ default: module.Documents })));
+const Terminal = lazy(() => import('./components/pages').then(module => ({ default: module.Terminal })));
+const MetricsEnhanced = lazy(() => import('./components/metrics/MetricsEnhanced').then(module => ({ default: module.MetricsEnhanced })));
+const Settings = lazy(() => import('./components/settings/Settings'));
+const PersonalWorkspace = lazy(() => import('./components/workspace/PersonalWorkspace'));
 
 const FALLBACK_SUMMARY: GatewaySummary = {
   ok: false,
@@ -31,6 +35,7 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifsOpen, setNotifsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1100);
   const [summary, setSummary] = useState<GatewaySummary>(FALLBACK_SUMMARY);
 
@@ -75,6 +80,7 @@ export default function App() {
 
   useEffect(() => {
     if (!isMobile) setMobileNavOpen(false);
+    if (isMobile) setDesktopSidebarCollapsed(false);
   }, [isMobile]);
 
   const renderPage = () => {
@@ -109,6 +115,34 @@ export default function App() {
         />
       )}
 
+      {!isMobile && desktopSidebarCollapsed && (
+        <button
+          onClick={() => setDesktopSidebarCollapsed(false)}
+          aria-label="Show left navigation"
+          style={{
+            position: 'fixed',
+            left: 12,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            zIndex: 18,
+            border: '1px solid rgba(255,255,255,0.1)',
+            background: 'rgba(10,16,27,0.78)',
+            color: 'var(--accent-dark)',
+            borderRadius: 999,
+            padding: '12px 10px',
+            cursor: 'pointer',
+            boxShadow: '0 12px 30px rgba(0,0,0,0.18)',
+            writingMode: 'vertical-rl',
+            textOrientation: 'mixed',
+            letterSpacing: '0.08em',
+            fontWeight: 700,
+            fontSize: 11,
+          }}
+        >
+          ✦ Chat / Show Tabs
+        </button>
+      )}
+
       <Sidebar
         active={active}
         onNav={(id) => {
@@ -119,6 +153,7 @@ export default function App() {
         currentUserName={auth.user?.displayName || 'Rusty'}
         mobile={isMobile}
         mobileOpen={mobileNavOpen}
+        desktopCollapsed={desktopSidebarCollapsed}
       />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
@@ -128,18 +163,23 @@ export default function App() {
           onSearchOpen={() => setSearchOpen(true)}
           onNotifsToggle={() => setNotifsOpen(n => !n)}
           onMenuToggle={() => setMobileNavOpen(v => !v)}
+          onSidebarToggle={() => setDesktopSidebarCollapsed(v => !v)}
+          onNav={(id) => setActive(id)}
           notifsOpen={notifsOpen}
           unreadCount={unreadCount}
           mobile={isMobile}
           summary={summary}
-          userLabel={auth.isDemoMode ? 'Demo mode' : auth.user?.email || 'Authenticated'}
+          userLabel={auth.isDemoMode ? 'Demo mode' : (appConfig.authMode === 'openclaw' ? 'OpenClaw mode' : auth.user?.email || 'Authenticated')}
+          sidebarCollapsed={desktopSidebarCollapsed}
         />
 
         {!summary.ok && <ConnectionBanner summary={summary} />}
 
         <main style={{ flex: 1, overflow: fullHeight ? 'hidden' : 'auto', position: 'relative' }}>
           <div key={active} className="animate-fade-up" style={{ height: '100%' }}>
-            {page}
+            <Suspense fallback={<div style={{ padding: 24 }}><LoadingSpinner label="Loading workspace…" /></div>}>
+              {page}
+            </Suspense>
           </div>
         </main>
       </div>

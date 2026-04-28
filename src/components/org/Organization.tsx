@@ -1,134 +1,267 @@
-import React, { useState } from 'react';
-import { OrgDocuments } from './OrgDocuments';
-import { OrgMeetings } from './OrgMeetings';
-import { OrgActivity, OrgCRM } from './OrgActivityCRM';
-import { OrgSettings } from './OrgSettings';
+import React, { useMemo, useState } from 'react';
+import { orgApi } from '../../lib/api';
+import { useCommandStore, type OrgTask } from '../../stores/useCommandStore';
+import { Eyebrow, GlassCard, MetricCard, PageShell, PrimaryButton, SecondaryButton, SectionHeader, Segmented, ProgressBar } from '../ui/premium';
 
-type SubTab = 'overview' | 'chart' | 'projects' | 'discussions' | 'tasks' | 'documents' | 'crm' | 'meetings' | 'activity' | 'settings';
+type Tab = 'Overview' | 'Org Chart' | 'Projects' | 'Discussions' | 'Tasks' | 'Documents' | 'Meetings' | 'Activity Feed' | 'Settings';
 
-const SUB_TABS: { id: SubTab; label: string; icon: string }[] = [
-  { id: 'overview',    label: 'Overview',      icon: '⊞' },
-  { id: 'chart',       label: 'Org Chart',     icon: '⬡' },
-  { id: 'projects',    label: 'Projects',      icon: '◳' },
-  { id: 'discussions', label: 'Discussions',   icon: '✦' },
-  { id: 'tasks',       label: 'Tasks',         icon: '✓' },
-  { id: 'documents',   label: 'Documents',     icon: '❏' },
-  { id: 'crm',         label: 'CRM',           icon: '📇' },
-  { id: 'meetings',    label: 'Meetings',      icon: '◷' },
-  { id: 'activity',    label: 'Activity',      icon: '◌' },
-  { id: 'settings',    label: 'Settings',      icon: '⚙' },
+const tabs: Tab[] = ['Overview', 'Org Chart', 'Projects', 'Discussions', 'Tasks', 'Documents', 'Meetings', 'Activity Feed', 'Settings'];
+
+const members = [
+  { name: 'Rusty', role: 'Founder', team: 'Executive', color: '#00E6A8', agent: 'Strategy Lead' },
+  { name: 'Sarah Kent', role: 'Operations Lead', team: 'Ops', color: '#60a5fa', agent: 'Ops Analyst' },
+  { name: 'Marcus Trent', role: 'Growth', team: 'Growth', color: '#a78bfa', agent: 'Research Agent' },
+  { name: 'Patricia Cruz', role: 'Board Advisor', team: 'Board', color: '#fbbf24', agent: 'Board Counsel' },
 ];
 
-const MEMBERS = [
-  { name: 'Rusty',    role: 'Owner',  status: 'online',  agent: 'Orchestrator', model: 'claude-sonnet',  initial: 'R', color: '#00E6A8' },
-  { name: 'Sarah K.', role: 'Admin',  status: 'online',  agent: 'LawAssist',    model: 'gemini-flash',   initial: 'S', color: '#3B82F6' },
-  { name: 'Marcus T.',role: 'Member', status: 'busy',    agent: null,           model: null,             initial: 'M', color: '#8B5CF6' },
-  { name: 'Alex R.',  role: 'Guest',  status: 'offline', agent: null,           model: null,             initial: 'A', color: '#F59E0B' },
+const orgMetrics = [
+  { label: 'Shared workspaces', value: '07', delta: '3 private, 4 shared', icon: '◫', tone: 'var(--accent)' },
+  { label: 'Projects in flight', value: '19', delta: '8 AI-assisted', icon: '◳', tone: '#60a5fa' },
+  { label: 'Decision velocity', value: '2.4x', delta: 'Faster than last quarter', icon: '◌', tone: '#a78bfa' },
+  { label: 'Board confidence', value: '94%', delta: 'Voting engine aligned', icon: '✦', tone: '#34d399' },
 ];
 
-const PROJECTS_DATA = [
-  { title: 'Dashboard UI Rebuild',         status: 'In Progress', assignee: '👤 Rusty',         priority: 'High',   due: 'Apr 30' },
-  { title: 'Legal Intake Pipeline',        status: 'In Progress', assignee: '◎ LawAssist',      priority: 'High',   due: 'May 5'  },
-  { title: 'Attorney Beta Onboarding',     status: 'Review',      assignee: '◎ Orchestrator',   priority: 'High',   due: 'Apr 26' },
-  { title: 'CRM Auto-Enrichment Skill',    status: 'Backlog',     assignee: '👤 Rusty',         priority: 'Medium', due: 'May 15' },
-  { title: 'Billing Integration',          status: 'Backlog',     assignee: '👤 Marcus T.',     priority: 'Low',    due: 'May 20' },
-  { title: 'DeepSeek Model Routing',       status: 'Done',        assignee: '👤 Rusty',         priority: 'Medium', due: 'Apr 20' },
+const projects = [
+  { name: 'OpenClaw Mobile Strategy', owner: 'Rusty + Strategy Lead', view: 'Timeline', status: 'In progress' },
+  { name: 'Legal Intake Automation', owner: 'Sarah + Ops Analyst', view: 'Kanban', status: 'Needs review' },
+  { name: 'Pricing Council', owner: 'Board-only room', view: 'Calendar', status: 'Scheduled' },
+  { name: 'Growth Experiments', owner: 'Marcus + Research Agent', view: 'List', status: 'Active' },
 ];
 
-const CHANNELS = [
-  { name: '# general',         type: 'public',   unread: 0 },
-  { name: '# legal-strategy',  type: 'public',   unread: 3 },
-  { name: '# dev',             type: 'public',   unread: 0 },
-  { name: '🤖 agent-room',     type: 'ai',       unread: 1 },
-  { name: '📋 board-only',     type: 'board',    unread: 0 },
-  { name: '@ Sarah K.',        type: 'dm',       unread: 2 },
-  { name: '@ Marcus T.',       type: 'dm',       unread: 0 },
+const tasks = [
+  { title: 'Turn discussion decisions into task templates', assignee: 'Strategy Lead', dependency: 'Board motion #12', status: 'Running' },
+  { title: 'Create board-only meeting pack', assignee: 'Board Counsel', dependency: 'Pricing summary', status: 'Queued' },
+  { title: 'Sync shared org memory to project rooms', assignee: 'Ops Analyst', dependency: 'Vault index refresh', status: 'Ready' },
 ];
 
-function GlassCard({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-  return <div className="glass-card" style={{ padding: '16px 18px', ...style }}>{children}</div>;
-}
+const channels = [
+  { name: '# executive', type: 'Board-only', unread: 0 },
+  { name: '# product-strategy', type: 'Shared', unread: 6 },
+  { name: '# ai-only-ops', type: 'AI-only', unread: 2 },
+  { name: '@ sarah', type: 'DM', unread: 1 },
+];
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12 }}>{children}</div>;
-}
+const docs = [
+  'Board packet · Q2 growth motions',
+  'Shared org charter · humans + AI agents',
+  'Legal intake operating system',
+  'Decision memo templates',
+];
 
-// ── Sub-views ──────────────────────────────────────────────
+const activity = [
+  ['Board Meeting Mode assembled voting context for pricing', '8 min ago'],
+  ['Growth workspace created 4 task automations from Slack discussion', '26 min ago'],
+  ['Org Chart update: Research Agent moved under Growth pod', '58 min ago'],
+  ['Shared memory synced into Executive and Product workspaces', '2 hrs ago'],
+];
 
-function OrgOverview() {
+export default function Organization() {
+  const [tab, setTab] = useState<Tab>('Overview');
+  const [projectView, setProjectView] = useState('Kanban');
+  const [meetingMode, setMeetingMode] = useState('Board Meeting Mode');
+  const [room, setRoom] = useState('# product-strategy');
+
+  const content = useMemo(() => {
+    switch (tab) {
+      case 'Overview': return <OverviewTab />;
+      case 'Org Chart': return <OrgChartTab />;
+      case 'Projects': return <ProjectsTab view={projectView} setView={setProjectView} />;
+      case 'Discussions': return <DiscussionsTab room={room} setRoom={setRoom} />;
+      case 'Tasks': return <TasksTab />;
+      case 'Documents': return <DocumentsTab />;
+      case 'Meetings': return <MeetingsTab mode={meetingMode} setMode={setMeetingMode} />;
+      case 'Activity Feed': return <ActivityTab />;
+      case 'Settings': return <SettingsTab />;
+      default: return null;
+    }
+  }, [tab, projectView, room, meetingMode]);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Org header card */}
-      <div className="glass-card" style={{
-        padding: '20px 24px',
-        background: 'linear-gradient(135deg, rgba(0,230,168,0.08), rgba(59,130,246,0.06))',
-        borderColor: 'rgba(0,230,168,0.2)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{
-            width: 52, height: 52, borderRadius: 14,
-            background: 'linear-gradient(135deg, #00E6A8, #3B82F6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 22, fontWeight: 800, color: '#fff',
-            boxShadow: '0 6px 20px rgba(0,230,168,0.3)',
-          }}>R</div>
+    <PageShell>
+      <GlassCard strong style={{ padding: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap', alignItems: 'start' }}>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.5px' }}>Rusty's Org</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace', marginTop: 2 }}>@rustyadj · 4 members · 2 AI agents · Since Apr 2026</div>
+            <Eyebrow>Organization workspace</Eyebrow>
+            <div style={{ marginTop: 10, fontSize: 30, fontWeight: 800, letterSpacing: '-0.06em' }}>Shared human + AI operating system</div>
+            <div style={{ marginTop: 10, fontSize: 14, lineHeight: 1.7, color: 'var(--text-secondary)', maxWidth: 760 }}>
+              Every member gets a private workspace and can selectively bring agents into the shared organization. Projects, discussions, tasks, memory, documents, and board decisions stay coordinated inside one premium control plane.
+            </div>
           </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 9, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Outfit', sans-serif", color: 'var(--text-secondary)' }}>
-              🔗 Invite Link
-            </button>
-            <button style={{ background: 'linear-gradient(135deg, #00E6A8, #00C494)', border: 'none', borderRadius: 9, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: "'Outfit', sans-serif", color: '#fff', boxShadow: '0 3px 10px rgba(0,230,168,0.3)' }}>
-              + Invite Member
-            </button>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <PrimaryButton>Invite member</PrimaryButton>
+            <SecondaryButton>Launch AI voting</SecondaryButton>
+          </div>
+        </div>
+      </GlassCard>
+
+      <div className="stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+        {orgMetrics.map(metric => <MetricCard key={metric.label} {...metric} />)}
+      </div>
+
+      <Segmented options={tabs} value={tab} onChange={v => setTab(v as Tab)} />
+      {content}
+    </PageShell>
+  );
+}
+
+function OverviewTab() {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.45fr) minmax(320px,1fr)', gap: 16 }}>
+      <div style={{ display: 'grid', gap: 16 }}>
+        <GlassCard>
+          <SectionHeader title="Member + agent workspace map" subtitle="Personal workspaces feeding one shared org" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            {members.map(member => (
+              <div key={member.name} style={{ padding: 16, borderRadius: 18, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 14, background: `${member.color}20`, border: `1px solid ${member.color}44`, display: 'grid', placeItems: 'center', color: member.color, fontWeight: 800 }}>{member.name.split(' ').map(s => s[0]).join('').slice(0,2)}</div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{member.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{member.role} · {member.team}</div>
+                  </div>
+                </div>
+                <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-secondary)' }}>Private workspace + shared org contribution lane</div>
+                <div style={{ marginTop: 10 }}><span className="tag tag-accent">◎ {member.agent}</span></div>
+              </div>
+            ))}
+          </div>
+        </GlassCard>
+
+        <GlassCard>
+          <SectionHeader title="Shared org projects" subtitle="Kanban, list, calendar, and timeline views" />
+          <div style={{ display: 'grid', gap: 10 }}>
+            {projects.map(project => (
+              <div key={project.name} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 10, alignItems: 'center', padding: '14px 16px', borderRadius: 18, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{project.name}</div>
+                  <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted)' }}>{project.owner}</div>
+                </div>
+                <span className="tag tag-blue">{project.view}</span>
+                <span className={`tag ${project.status === 'Needs review' ? 'tag-amber' : project.status === 'Scheduled' ? 'tag-violet' : 'tag-green'}`}>{project.status}</span>
+              </div>
+            ))}
+          </div>
+        </GlassCard>
+      </div>
+
+      <div style={{ display: 'grid', gap: 16 }}>
+        <GlassCard>
+          <SectionHeader title="Decision engine" subtitle="Board + AI consensus" />
+          <div style={{ padding: 16, borderRadius: 18, background: 'linear-gradient(135deg, rgba(0,230,168,0.12), rgba(96,165,250,0.08))', border: '1px solid rgba(0,230,168,0.18)' }}>
+            <div style={{ fontSize: 14, fontWeight: 800 }}>Board Meeting Mode</div>
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>AI assembles motions, surfaces tradeoffs, and lets human board members vote with context already distilled.</div>
+            <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
+              <VoteRow label="Increase growth budget" yes={78} />
+              <VoteRow label="Add second legal ops agent" yes={88} />
+              <VoteRow label="Hold pricing until next cycle" yes={34} />
+            </div>
+          </div>
+        </GlassCard>
+
+        <GlassCard>
+          <SectionHeader title="Latest activity" subtitle="What changed across the org" />
+          <div style={{ display: 'grid', gap: 12 }}>
+            {activity.map(([text, time]) => (
+              <div key={text} style={{ paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ fontSize: 12.5, color: 'var(--text-primary)', lineHeight: 1.6 }}>{text}</div>
+                <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}>{time}</div>
+              </div>
+            ))}
+          </div>
+        </GlassCard>
+      </div>
+    </div>
+  );
+}
+
+function OrgChartTab() {
+  return (
+    <GlassCard>
+      <SectionHeader title="Interactive org chart builder" subtitle="Humans + AI agents with expandable teams and profile side panels" action={<div style={{ display: 'flex', gap: 8 }}><SecondaryButton>Expand all</SecondaryButton><PrimaryButton>+ Add node</PrimaryButton></div>} />
+      <div style={{ marginTop: 18, display: 'grid', placeItems: 'center', minHeight: 540, background: 'rgba(255,255,255,0.03)', borderRadius: 22, border: '1px dashed rgba(255,255,255,0.14)', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
+        <div style={{ position: 'relative', display: 'grid', gap: 42, justifyItems: 'center' }}>
+          <NodeCard title="Rusty" subtitle="Founder · Executive" accent="#00E6A8" meta="Strategy Lead + Board Counsel" root />
+          <div style={{ width: 2, height: 28, background: 'rgba(255,255,255,0.16)' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(180px, 1fr))', gap: 28 }}>
+            <NodeCard title="Operations Pod" subtitle="Sarah Kent" accent="#60a5fa" meta="Ops Analyst + Legal Ops" />
+            <NodeCard title="Growth Pod" subtitle="Marcus Trent" accent="#a78bfa" meta="Research Agent + Campaign AI" />
+            <NodeCard title="Board Cell" subtitle="Patricia Cruz" accent="#fbbf24" meta="Board-only room + voting AI" />
           </div>
         </div>
       </div>
+    </GlassCard>
+  );
+}
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-        {[
-          { label: 'Members',   val: '4',  icon: '👥' },
-          { label: 'AI Agents', val: '2',  icon: '◎' },
-          { label: 'Projects',  val: '6',  icon: '◳' },
-          { label: 'Tasks',     val: '12', icon: '✓' },
-        ].map(s => (
-          <GlassCard key={s.label} style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 22 }}>{s.icon}</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', marginTop: 4 }}>{s.val}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{s.label}</div>
-          </GlassCard>
+function ProjectsTab({ view, setView }: { view: string; setView: (v: string) => void }) {
+  return (
+    <GlassCard>
+      <SectionHeader title="Projects workspace" subtitle="Kanban / list / calendar / timeline" action={<PrimaryButton>+ New project</PrimaryButton>} />
+      <div style={{ marginTop: 12, marginBottom: 18 }}><Segmented options={['Kanban', 'List', 'Calendar', 'Timeline']} value={view} onChange={setView} /></div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(220px,1fr))', gap: 14 }}>
+        {['Backlog', 'In Progress', 'Review', 'Done'].map(col => (
+          <div key={col} className="surface-light" style={{ padding: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#1f2937' }}>{col}</div>
+              <span className="tag tag-gray">{projects.filter(p => (col === 'Done' ? false : col === 'Review' ? p.status === 'Needs review' : col === 'In Progress' ? p.status === 'In progress' : col === 'Backlog' ? p.status === 'Scheduled' || p.status === 'Active' : false)).length}</span>
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {projects.map(project => (
+                <div key={project.name + col} style={{ padding: 12, borderRadius: 16, background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(15,23,35,0.08)' }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: '#111827' }}>{project.name}</div>
+                  <div style={{ marginTop: 6, fontSize: 11, color: '#6b7280' }}>{project.owner}</div>
+                  <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <span className="tag tag-blue">{project.view}</span>
+                    <span className="tag tag-accent">AI assisted</span>
+                  </div>
+                </div>
+              )).slice(0,1)}
+            </div>
+          </div>
         ))}
       </div>
+    </GlassCard>
+  );
+}
 
-      {/* Members */}
+function DiscussionsTab({ room, setRoom }: { room: string; setRoom: (v: string) => void }) {
+  const discussions = useCommandStore(state => state.orgStore.discussions);
+  const addDiscussionReply = useCommandStore(state => state.addDiscussionReply);
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [reply, setReply] = useState('');
+  const submitReply = async (discussionId: string) => {
+    if (!reply.trim()) return;
+    await orgApi.reply(discussionId, reply);
+    addDiscussionReply(discussionId, { id: crypto.randomUUID(), author: 'Rusty', text: reply.trim(), createdAt: 'Just now' });
+    setReply('');
+    setReplyingTo(null);
+  };
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '280px minmax(0,1fr)', gap: 16 }}>
       <GlassCard>
-        <SectionTitle>Members</SectionTitle>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-          {MEMBERS.map(m => (
-            <div key={m.name} style={{
-              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-              background: 'rgba(255,255,255,0.5)', border: '1px solid rgba(0,0,0,0.05)',
-              borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s',
-            }}>
-              <div style={{
-                width: 36, height: 36, borderRadius: 10,
-                background: `${m.color}20`, border: `1.5px solid ${m.color}40`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 14, fontWeight: 700, color: m.color,
-              }}>{m.initial}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{m.name}</span>
-                  <span className={`status-dot ${m.status}`} />
-                </div>
-                <span className={`tag tag-${m.role === 'Owner' ? 'accent' : m.role === 'Admin' ? 'blue' : m.role === 'Member' ? 'violet' : 'gray'}`} style={{ fontSize: 10, marginTop: 2 }}>{m.role}</span>
+        <SectionHeader title="Channels" subtitle="Slack / Discord style collaboration" />
+        <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+          {channels.map(channel => (
+            <button key={channel.name} onClick={() => setRoom(channel.name)} style={{ textAlign: 'left', padding: '12px 14px', borderRadius: 16, border: room === channel.name ? '1px solid rgba(0,230,168,0.3)' : '1px solid rgba(255,255,255,0.08)', background: room === channel.name ? 'rgba(0,230,168,0.11)' : 'rgba(255,255,255,0.04)', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: room === channel.name ? 'var(--accent-dark)' : 'var(--text-primary)' }}>{channel.name}</span>
+                {channel.unread > 0 && <span className="tag tag-accent">{channel.unread}</span>}
               </div>
-              {m.agent && (
-                <div style={{ fontSize: 10, color: 'var(--accent-dark)', background: 'var(--accent-soft)', borderRadius: 6, padding: '3px 7px', fontFamily: 'DM Mono, monospace' }}>◎ {m.agent}</div>
-              )}
+              <div style={{ marginTop: 5, fontSize: 11, color: 'var(--text-muted)' }}>{channel.type}</div>
+            </button>
+          ))}
+        </div>
+      </GlassCard>
+      <GlassCard>
+        <SectionHeader title={room} subtitle="Humans, agents, and board-only rooms in one collaboration surface" action={<PrimaryButton>+ New room</PrimaryButton>} />
+        <div style={{ marginTop: 14, display: 'grid', gap: 14 }}>
+          {discussions.map(item => (
+            <div key={item.id} style={{ padding: '14px 16px', borderRadius: 18, background: item.author === 'Rusty' ? 'linear-gradient(135deg, rgba(0,230,168,0.14), rgba(0,196,148,0.12))' : 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.09)', fontSize: 13, lineHeight: 1.7, color: 'var(--text-primary)' }}>
+              <strong>{item.author}:</strong> {item.text}
+              <div style={{ marginTop: 8 }}><button onClick={() => setReplyingTo(replyingTo === item.id ? null : item.id)} style={{ border: 'none', background: 'transparent', color: 'var(--accent-dark)', cursor: 'pointer', fontWeight: 700 }}>Reply</button></div>
+              {item.replies.map(child => <div key={child.id} style={{ marginTop: 8, marginLeft: 16, padding: '10px 12px', borderRadius: 14, background: 'rgba(255,255,255,0.08)' }}><strong>{child.author}:</strong> {child.text}</div>)}
+              {replyingTo === item.id && <div style={{ marginTop: 10, display: 'flex', gap: 8 }}><input value={reply} onChange={e => setReply(e.target.value)} placeholder="Write threaded reply…" style={{ flex: 1, height: 38, borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)', color: 'var(--text-primary)', padding: '0 12px' }} /><PrimaryButton onClick={() => submitReply(item.id)}>Send</PrimaryButton></div>}
             </div>
           ))}
         </div>
@@ -137,262 +270,139 @@ function OrgOverview() {
   );
 }
 
-function OrgChart() {
+function TasksTab() {
+  const orgTasks = useCommandStore(state => state.orgStore.tasks);
+  const moveOrgTask = useCommandStore(state => state.moveOrgTask);
+  const statuses: OrgTask['status'][] = ['Backlog', 'In Progress', 'Review', 'Done'];
+  const move = async (taskId: string, status: OrgTask['status']) => { await orgApi.moveTask(taskId, status); moveOrgTask(taskId, status); };
   return (
-    <GlassCard style={{ minHeight: 400 }}>
-      <SectionTitle>Organization Chart</SectionTitle>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, padding: '20px 0' }}>
-        {/* Root */}
-        <OrgNode name="Rusty" role="Owner" agent="Orchestrator" color="#00E6A8" initial="R" isRoot />
-        <div style={{ width: 2, height: 32, background: 'rgba(0,0,0,0.1)' }} />
-
-        {/* Branch line */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 40 }}>
-          {/* Left branch */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div style={{ width: 2, height: 28, background: 'rgba(0,0,0,0.1)' }} />
-            <OrgNode name="Sarah K." role="Admin" agent="LawAssist" color="#3B82F6" initial="S" />
+    <GlassCard>
+      <SectionHeader title="Task orchestration" subtitle="Drag tasks between columns; changes persist to org state" action={<PrimaryButton>+ New task</PrimaryButton>} />
+      <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(180px,1fr))', gap: 12 }}>
+        {statuses.map(status => (
+          <div key={status} onDragOver={event => event.preventDefault()} onDrop={event => move(event.dataTransfer.getData('task/id'), status)} style={{ minHeight: 260, padding: 12, borderRadius: 18, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ marginBottom: 10, fontSize: 12, fontWeight: 800 }}>{status}</div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {orgTasks.filter(task => task.status === status).map(task => (
+                <div key={task.id} draggable onDragStart={event => event.dataTransfer.setData('task/id', task.id)} style={{ padding: '14px 16px', borderRadius: 18, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.09)', cursor: 'grab' }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 700 }}>{task.title}</div>
+                  <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}>{task.owner || 'Unassigned'} · {task.priority || 'Normal'}</div>
+                  <div style={{ marginTop: 10 }}><ProgressBar value={status === 'Done' ? 100 : status === 'Review' ? 78 : status === 'In Progress' ? 52 : 18} /></div>
+                </div>
+              ))}
+            </div>
           </div>
-          {/* Mid */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div style={{ width: 2, height: 28, background: 'rgba(0,0,0,0.1)' }} />
-            <OrgNode name="Marcus T." role="Member" agent={null} color="#8B5CF6" initial="M" />
-          </div>
-          {/* Right */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div style={{ width: 2, height: 28, background: 'rgba(0,0,0,0.1)' }} />
-            <OrgNode name="Alex R." role="Guest" agent={null} color="#F59E0B" initial="A" />
-          </div>
-        </div>
+        ))}
       </div>
     </GlassCard>
   );
 }
 
-function OrgNode({ name, role, agent, color, initial, isRoot }: any) {
+function DocumentsTab() {
   return (
-    <div style={{
-      background: isRoot ? `linear-gradient(135deg, ${color}15, ${color}08)` : 'rgba(255,255,255,0.6)',
-      border: `1.5px solid ${isRoot ? color + '40' : 'rgba(0,0,0,0.08)'}`,
-      borderRadius: 14, padding: '14px 18px', minWidth: 160, textAlign: 'center',
-      cursor: 'pointer', transition: 'all 0.18s',
-      boxShadow: isRoot ? `0 6px 20px ${color}20` : 'var(--glass-shadow)',
-    }}>
-      <div style={{
-        width: 40, height: 40, borderRadius: 12, margin: '0 auto 8px',
-        background: `${color}25`, border: `2px solid ${color}50`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 16, fontWeight: 800, color,
-      }}>{initial}</div>
-      <div style={{ fontSize: 13, fontWeight: 700 }}>{name}</div>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{role}</div>
-      {agent && (
-        <div style={{ marginTop: 6, fontSize: 10, color: 'var(--accent-dark)', background: 'var(--accent-soft)', borderRadius: 6, padding: '3px 8px', display: 'inline-block', fontFamily: 'DM Mono, monospace' }}>
-          ◎ {agent}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Projects() {
-  const cols = ['Backlog', 'In Progress', 'Review', 'Done'];
-  return (
-    <div>
-      {/* View toggles */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-        {['Kanban', 'List', 'Calendar', 'Timeline'].map((v, i) => (
-          <button key={v} style={{
-            padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)',
-            background: i === 0 ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.4)',
-            fontSize: 12, fontWeight: i === 0 ? 600 : 500,
-            color: i === 0 ? 'var(--text-primary)' : 'var(--text-muted)',
-            cursor: 'pointer', fontFamily: "'Outfit', sans-serif",
-          }}>{v}</button>
-        ))}
-        <button style={{ marginLeft: 'auto', background: 'linear-gradient(135deg, #00E6A8, #00C494)', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit', sans-serif", boxShadow: '0 3px 10px rgba(0,230,168,0.25)' }}>+ New Project</button>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
-        {cols.map(col => {
-          const items = PROJECTS_DATA.filter(p => p.status === col);
-          return (
-            <div key={col}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>{col}</span>
-                <span style={{ background: 'rgba(0,0,0,0.07)', borderRadius: 99, fontSize: 10, fontWeight: 700, padding: '1px 7px', color: 'var(--text-muted)' }}>{items.length}</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {items.map(p => (
-                  <div key={p.title} className="glass-card" style={{ padding: '12px 14px', cursor: 'pointer' }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.4, marginBottom: 8 }}>{p.title}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.assignee}</span>
-                      <span className={`tag tag-${p.priority === 'High' ? 'red' : p.priority === 'Medium' ? 'amber' : 'gray'}`}>{p.priority}</span>
-                    </div>
-                    {p.due && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 5 }}>Due {p.due}</div>}
-                  </div>
-                ))}
-                <div style={{
-                  border: '1.5px dashed rgba(0,0,0,0.1)', borderRadius: 10,
-                  padding: '10px', textAlign: 'center', cursor: 'pointer',
-                  fontSize: 11, color: 'var(--text-muted)',
-                }}>+ Add</div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function Discussions() {
-  const [activeChannel, setActiveChannel] = useState('# legal-strategy');
-  return (
-    <div style={{ display: 'flex', gap: 16, height: 500 }}>
-      {/* Channel list */}
-      <div className="glass-card" style={{ width: 220, padding: '14px 0', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '0 14px 10px', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Channels</div>
-        {CHANNELS.map(c => (
-          <div key={c.name} onClick={() => setActiveChannel(c.name)} style={{
-            padding: '8px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            background: activeChannel === c.name ? 'rgba(0,230,168,0.1)' : 'transparent',
-            borderLeft: activeChannel === c.name ? '2px solid var(--accent)' : '2px solid transparent',
-            transition: 'all 0.15s',
-          }}>
-            <span style={{ fontSize: 12, fontWeight: c.unread > 0 ? 700 : 500, color: activeChannel === c.name ? 'var(--accent-dark)' : 'var(--text-secondary)' }}>{c.name}</span>
-            {c.unread > 0 && <span style={{ background: 'var(--accent)', color: '#fff', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 99 }}>{c.unread}</span>}
+    <GlassCard>
+      <SectionHeader title="Shared documents + AI knowledge" subtitle="Wiki, files, summaries, and searchable operating knowledge" action={<PrimaryButton>Upload</PrimaryButton>} />
+      <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+        {docs.map(doc => (
+          <div key={doc} style={{ padding: 16, borderRadius: 18, background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>{doc}</div>
+            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>Indexed for AI search, board packets, and project memory.</div>
           </div>
         ))}
       </div>
+    </GlassCard>
+  );
+}
 
-      {/* Messages area */}
-      <div className="glass-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(0,0,0,0.06)', fontWeight: 700, fontSize: 13 }}>{activeChannel}</div>
-        <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
-          {[
-            { from: 'Sarah K.', time: '10:23 AM', msg: 'James Holloway confirmed for the demo on May 2nd. Needs a one-pager on contract review automation beforehand.', initial: 'S', color: '#3B82F6' },
-            { from: 'Orchestrator ◎', time: '10:24 AM', msg: 'Understood. I\'ll generate a draft one-pager and post it in #documents for review.', initial: '◎', color: '#00E6A8' },
-            { from: 'Rusty', time: '10:31 AM', msg: 'Perfect. Keep it under 2 pages, focus on time savings and accuracy metrics.', initial: 'R', color: '#00E6A8' },
-          ].map((msg, i) => (
-            <div key={i} style={{ display: 'flex', gap: 10 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 9, background: `${msg.color}20`, border: `1.5px solid ${msg.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: msg.color, flexShrink: 0 }}>{msg.initial}</div>
-              <div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700 }}>{msg.from}</span>
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{msg.time}</span>
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{msg.msg}</div>
-              </div>
-            </div>
+function MeetingsTab({ mode, setMode }: { mode: string; setMode: (v: string) => void }) {
+  const castMeetingVote = useCommandStore(state => state.castMeetingVote);
+  const vote = async (motionId: string, choice: 'yes' | 'no' | 'abstain') => { await orgApi.castVote(mode, motionId, choice); castMeetingVote({ meetingId: mode, motionId, choice, user: 'Rusty' }); };
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) 360px', gap: 16 }}>
+      <GlassCard>
+        <SectionHeader title="Meetings + AI voting engine" subtitle="Premium board mode with structured motions" />
+        <div style={{ marginTop: 12 }}><Segmented options={['Board Meeting Mode', 'Leadership Sync', 'Project Review']} value={mode} onChange={setMode} /></div>
+        <div style={{ marginTop: 16, padding: 18, borderRadius: 22, background: 'linear-gradient(135deg, rgba(0,230,168,0.12), rgba(96,165,250,0.08))', border: '1px solid rgba(0,230,168,0.18)' }}>
+          <div style={{ fontSize: 16, fontWeight: 800 }}>{mode}</div>
+          <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>AI assembles agendas, summarizes tradeoffs, forecasts likely vote outcomes, and prepares counterarguments before the room opens.</div>
+          <div style={{ marginTop: 16, display: 'grid', gap: 10 }}>
+            <VoteRow label="Expand org-wide AI workforce" yes={82} onVote={(choice) => vote('expand-ai-workforce', choice)} />
+            <VoteRow label="Approve pricing test" yes={74} onVote={(choice) => vote('approve-pricing-test', choice)} />
+            <VoteRow label="Pause onboarding until legal flow is fixed" yes={41} onVote={(choice) => vote('pause-onboarding', choice)} />
+          </div>
+        </div>
+      </GlassCard>
+      <GlassCard>
+        <SectionHeader title="Live controls" subtitle="Meeting prep" />
+        <div style={{ display: 'grid', gap: 10 }}>
+          {['Generate agenda', 'Assemble board packet', 'Run pre-vote simulation', 'Open live voting'].map(item => (
+            <button key={item} style={{ textAlign: 'left', padding: '12px 14px', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600 }}>{item}</button>
           ))}
         </div>
-        <div style={{ padding: '10px 14px', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-          <input placeholder={`Message ${activeChannel}...`} style={{ width: '100%', background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 9, padding: '9px 14px', fontSize: 12 }} />
-        </div>
-      </div>
+      </GlassCard>
     </div>
   );
 }
 
-function Tasks() {
-  const tasks = [
-    { title: 'Review Patricia Cruz intake form', assignee: '👤 Rusty',       priority: 'High',   status: 'In Progress', due: 'Apr 26' },
-    { title: 'Draft attorney one-pager',         assignee: '◎ Orchestrator', priority: 'High',   status: 'In Progress', due: 'Apr 27' },
-    { title: 'Legal intake pipeline deploy',     assignee: '◎ LawAssist',    priority: 'High',   status: 'Backlog',     due: 'May 5'  },
-    { title: 'Schedule James Holloway demo',     assignee: '👤 Rusty',       priority: 'High',   status: 'Backlog',     due: 'Apr 30' },
-    { title: 'CRM skill install + configure',    assignee: '👤 Rusty',       priority: 'Medium', status: 'Backlog',     due: 'May 15' },
-    { title: 'Cost report cron fix',             assignee: '◎ Orchestrator', priority: 'Low',    status: 'Backlog',     due: 'May 1'  },
-  ];
+function ActivityTab() {
   return (
-    <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-        <button style={{ marginLeft: 'auto', background: 'linear-gradient(135deg, #00E6A8, #00C494)', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit', sans-serif", boxShadow: '0 3px 10px rgba(0,230,168,0.25)' }}>+ New Task</button>
-      </div>
-      <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-              {['Task', 'Assignee', 'Priority', 'Status', 'Due'].map(h => (
-                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {tasks.map((t, i) => (
-              <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)', transition: 'background 0.12s', cursor: 'pointer' }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.02)')}
-                onMouseLeave={e => (e.currentTarget.style.background = '')}
-              >
-                <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{t.title}</td>
-                <td style={{ padding: '11px 16px', fontSize: 12, color: 'var(--text-secondary)' }}>{t.assignee}</td>
-                <td style={{ padding: '11px 16px' }}><span className={`tag tag-${t.priority === 'High' ? 'red' : t.priority === 'Medium' ? 'amber' : 'gray'}`}>{t.priority}</span></td>
-                <td style={{ padding: '11px 16px' }}><span className={`tag tag-${t.status === 'In Progress' ? 'blue' : 'gray'}`}>{t.status}</span></td>
-                <td style={{ padding: '11px 16px', fontSize: 11, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>{t.due}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// ── Main component ─────────────────────────────────────────
-
-export default function Organization() {
-  const [sub, setSub] = useState<SubTab>('overview');
-
-  const renderSub = () => {
-    switch (sub) {
-      case 'overview':    return <OrgOverview />;
-      case 'chart':       return <OrgChart />;
-      case 'projects':    return <Projects />;
-      case 'discussions': return <Discussions />;
-      case 'tasks':       return <Tasks />;
-      case 'documents':   return <OrgDocuments />;
-      case 'crm':         return <OrgCRM />;
-      case 'meetings':    return <OrgMeetings />;
-      case 'activity':    return <OrgActivity />;
-      case 'settings':    return <OrgSettings />;
-      default:            return null;
-    }
-  };
-
-  return (
-    <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16, height: '100%', overflowY: 'auto' }}>
-      {/* Sub-tabs */}
-      <div style={{
-        display: 'flex', gap: 2, padding: '4px',
-        background: 'rgba(255,255,255,0.5)', border: '1px solid rgba(0,0,0,0.07)',
-        borderRadius: 12, backdropFilter: 'blur(12px)', width: 'fit-content',
-      }}>
-        {SUB_TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setSub(t.id)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '7px 13px', borderRadius: 9, border: 'none',
-              background: sub === t.id ? 'white' : 'transparent',
-              color: sub === t.id ? 'var(--text-primary)' : 'var(--text-muted)',
-              fontFamily: "'Outfit', sans-serif",
-              fontSize: 12, fontWeight: sub === t.id ? 700 : 500,
-              cursor: 'pointer', transition: 'all 0.15s',
-              boxShadow: sub === t.id ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
-            }}
-          >
-            <span style={{ fontSize: 13 }}>{t.icon}</span>
-            {t.label}
-          </button>
+    <GlassCard>
+      <SectionHeader title="Org activity feed" subtitle="Cross-tab operational pulse" />
+      <div style={{ marginTop: 14, display: 'grid', gap: 12 }}>
+        {activity.map(([text, time], i) => (
+          <div key={text} style={{ display: 'grid', gridTemplateColumns: '42px 1fr', gap: 12 }}>
+            <div style={{ width: 42, height: 42, borderRadius: 16, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', display: 'grid', placeItems: 'center' }}>{i % 2 === 0 ? '◌' : '✦'}</div>
+            <div style={{ paddingTop: 4 }}>
+              <div style={{ fontSize: 13, lineHeight: 1.6 }}>{text}</div>
+              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}>{time}</div>
+            </div>
+          </div>
         ))}
       </div>
+    </GlassCard>
+  );
+}
 
-      {/* Sub-content */}
-      <div className="animate-fade-in" style={{ flex: 1 }}>
-        {renderSub()}
+function SettingsTab() {
+  return (
+    <GlassCard>
+      <SectionHeader title="Organization settings" subtitle="Control collaboration boundaries and AI participation" />
+      <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+        {[
+          ['Private workspaces', 'Allow members to keep personal AI teams and private memory while joining the shared org.'],
+          ['Shared org memory', 'Decide what gets promoted from private workspaces into shared context.'],
+          ['AI room policy', 'Control AI-only rooms, board-only rooms, and which agents may enter each.'],
+          ['Voting thresholds', 'Set quorum, weighted votes, and when AI recommendations are visible.'],
+        ].map(([title, text]) => (
+          <div key={title} style={{ padding: 16, borderRadius: 18, background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>{title}</div>
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.7 }}>{text}</div>
+          </div>
+        ))}
       </div>
+    </GlassCard>
+  );
+}
+
+function NodeCard({ title, subtitle, accent, meta, root = false }: { title: string; subtitle: string; accent: string; meta: string; root?: boolean }) {
+  return (
+    <div style={{ minWidth: 220, padding: root ? '18px 20px' : '16px 18px', borderRadius: 22, background: root ? `${accent}16` : 'rgba(255,255,255,0.06)', border: `1px solid ${root ? `${accent}44` : 'rgba(255,255,255,0.1)'}`, boxShadow: root ? `0 18px 40px ${accent}18` : 'none' }}>
+      <div style={{ fontSize: 14, fontWeight: 800 }}>{title}</div>
+      <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted)' }}>{subtitle}</div>
+      <div style={{ marginTop: 10 }}><span className="tag tag-accent">◎ {meta}</span></div>
+    </div>
+  );
+}
+
+function VoteRow({ label, yes, onVote }: { label: string; yes: number; onVote?: (choice: 'yes' | 'no' | 'abstain') => void }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 7 }}>
+        <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{label}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-dark)' }}>{yes}% yes</span>
+      </div>
+      <ProgressBar value={yes} />
+      {onVote && <div style={{ marginTop: 8, display: 'flex', gap: 6 }}><SecondaryButton onClick={() => onVote('yes')}>Yes</SecondaryButton><SecondaryButton onClick={() => onVote('no')}>No</SecondaryButton><SecondaryButton onClick={() => onVote('abstain')}>Abstain</SecondaryButton></div>}
     </div>
   );
 }

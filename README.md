@@ -6,8 +6,8 @@ Glassmorphism React/Vite dashboard shell for OpenClaw.
 
 - Added a real gateway API integration point (`VITE_API_BASE_URL`) with live status polling.
 - Added a top-level React error boundary so one bad component does not nuke the whole app.
-- Added Firebase auth scaffolding with a hard stop when auth is not configured.
-- Added a demo-auth escape hatch for local previews only (`VITE_ALLOW_DEMO_AUTH=true`).
+- Added auth modes for OpenClaw-served UI, Firebase standalone auth, and local demo previews.
+- Added a demo-auth escape hatch for local previews only (`VITE_AUTH_MODE=demo`).
 - Added mobile nav handling so the shell is usable on smaller screens instead of instantly breaking.
 - Fixed package compatibility by pinning React 18 so installs/builds work with the current dependency tree.
 
@@ -34,27 +34,34 @@ npm run dev
 
 See `.env.example`.
 
-Minimum for a real deployment:
+Minimum for a real standalone deployment:
 
 ```bash
 VITE_API_BASE_URL=https://your-gateway.example.com
+VITE_AUTH_MODE=firebase
 VITE_FIREBASE_API_KEY=...
 VITE_FIREBASE_AUTH_DOMAIN=...
 VITE_FIREBASE_PROJECT_ID=...
 VITE_FIREBASE_APP_ID=...
 VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_STORAGE_BUCKET=...
-VITE_ALLOW_DEMO_AUTH=false
+```
+
+For OpenClaw-hosted deployment:
+
+```bash
+VITE_API_BASE_URL=
+VITE_AUTH_MODE=openclaw
 ```
 
 For local-only demo mode:
 
 ```bash
-VITE_ALLOW_DEMO_AUTH=true
+VITE_AUTH_MODE=demo
 ```
 
 ## Notes
 
 - The dashboard now tries `/health` and `/status` on the configured gateway base URL.
 - If those endpoints differ in your backend, update `src/lib/api.ts`.
-- Firebase is scaffolded but intentionally not optional in production mode.
+- When served by OpenClaw, auth mode should be `openclaw` so the app does not block behind a second auth wall.

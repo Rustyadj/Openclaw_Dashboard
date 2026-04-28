@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
-import { appConfig, hasFirebaseConfig } from '../lib/config';
+import { appConfig, hasFirebaseConfig, isDemoAuth, isOpenClawAuth } from '../lib/config';
 import { getFirebaseAuth } from '../lib/firebase';
 
 type AuthContextValue = {
@@ -15,11 +15,11 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [loading, setLoading] = useState(!appConfig.allowDemoAuth && hasFirebaseConfig);
+  const [loading, setLoading] = useState(appConfig.authMode === 'firebase' && hasFirebaseConfig);
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    if (appConfig.allowDemoAuth || !hasFirebaseConfig) {
+    if (isDemoAuth || isOpenClawAuth || !hasFirebaseConfig) {
       setLoading(false);
       return;
     }
@@ -38,8 +38,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AuthContextValue>(() => ({
     loading,
-    isAuthenticated: appConfig.allowDemoAuth || Boolean(user),
-    isDemoMode: appConfig.allowDemoAuth,
+    isAuthenticated: isDemoAuth || isOpenClawAuth || Boolean(user),
+    isDemoMode: isDemoAuth,
     user,
     signIn: async () => {
       const { auth, provider } = getFirebaseAuth();
@@ -75,9 +75,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         title="Authentication required"
         body={hasFirebaseConfig
           ? 'Sign in with Firebase before using the dashboard.'
-          : 'Add Firebase env vars or explicitly enable demo auth for local-only previews.'}
+          : 'Set VITE_AUTH_MODE=openclaw when this is served by OpenClaw, or configure Firebase for standalone auth.'}
         action={hasFirebaseConfig ? { label: 'Sign in with Google', onClick: auth.signIn } : undefined}
-        footer={!hasFirebaseConfig ? 'Copy .env.example to .env and configure Firebase + gateway URL.' : undefined}
+        footer={!hasFirebaseConfig ? 'Use demo mode only for local previews.' : undefined}
       />
     );
   }

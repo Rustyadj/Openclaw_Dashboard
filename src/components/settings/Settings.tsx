@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import { settingsApi } from '../../lib/api';
+import { useCommandStore } from '../../stores/useCommandStore';
+import { ErrorMessage } from '../ui/AsyncState';
 
 type SettingsTab = 'general' | 'models' | 'channels' | 'notifications' | 'appearance' | 'billing' | 'security';
 
@@ -54,7 +57,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function ApiKeyField({ label, placeholder, saved }: { label: string; placeholder: string; saved?: boolean }) {
   const [show, setShow] = useState(false);
-  const [val, setVal] = useState(saved ? 'sk-•••••••••••••••••••••' : '');
+  const [val, setVal] = useState(saved ? '•••••••••••••••••••••' : '');
+  const [test, setTest] = useState<string>('');
+  const looksValid = !val || val.includes('•') || val.length >= 8;
   return (
     <Field label={label}>
       <div style={{ display: 'flex', gap: 8 }}>
@@ -68,8 +73,11 @@ function ApiKeyField({ label, placeholder, saved }: { label: string; placeholder
         <button onClick={() => setShow(!show)} style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 9, padding: '0 12px', cursor: 'pointer', fontSize: 13, color: 'var(--text-muted)' }}>
           {show ? '🙈' : '👁'}
         </button>
+        <button onClick={async () => { const result = await settingsApi.testConnection(label, val); setTest(result.message); }} style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 9, padding: '0 12px', cursor: 'pointer', fontSize: 12, color: 'var(--text-secondary)' }}>Test</button>
         {saved && <span className="tag tag-green" style={{ alignSelf: 'center' }}>Saved</span>}
       </div>
+      {!looksValid && <div style={{ marginTop: 6, color: 'var(--status-red)', fontSize: 11 }}>API key looks too short.</div>}
+      {test && <div style={{ marginTop: 6, color: 'var(--text-muted)', fontSize: 11 }}>{test}</div>}
     </Field>
   );
 }
@@ -387,6 +395,24 @@ function SecuritySettings() {
 
 export default function Settings() {
   const [tab, setTab] = useState<SettingsTab>('general');
+  const settings = useCommandStore(state => state.settingsStore);
+  const saveSettings = useCommandStore(state => state.saveSettings);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [error, setError] = useState<Error | null>(null);
+
+  const saveCurrentTab = async () => {
+    setSaveState('saving');
+    setError(null);
+    try {
+      await settingsApi.save(tab, settings[tab]);
+      saveSettings(tab, settings[tab]);
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 1600);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error(String(err)));
+      setSaveState('idle');
+    }
+  };
 
   const renderContent = () => {
     switch (tab) {
@@ -416,8 +442,11 @@ export default function Settings() {
       {/* Content */}
       <div className="animate-fade-in" style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
         <div style={{ maxWidth: 640 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.5px', marginBottom: 4 }}>
-            {SETTINGS_TABS.find(t => t.id === tab)?.label}
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 4 }}>
+            <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.5px' }}>
+              {SETTINGS_TABS.find(t => t.id === tab)?.label}
+            </div>
+            <button onClick={saveCurrentTab} style={{ background: saveState === 'saved' ? 'rgba(0,201,122,0.15)' : 'linear-gradient(135deg,#00E6A8,#00C494)', border: saveState === 'saved' ? '1px solid rgba(0,201,122,0.3)' : 'none', borderRadius: 10, padding: '9px 16px', color: saveState === 'saved' ? 'var(--status-green)' : '#fff', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? '✓ Saved' : 'Save tab'}</button>
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 24 }}>
             {tab === 'general' && 'Profile, gateway connection, and workspace configuration'}
@@ -429,6 +458,7 @@ export default function Settings() {
             {tab === 'security' && 'Gateway security, agent permissions, and session management'}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <ErrorMessage error={error} />
             {renderContent()}
           </div>
         </div>
