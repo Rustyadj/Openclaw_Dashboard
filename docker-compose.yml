@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  openclaw:
+    build:
+      context: .
+      # Vite bakes VITE_* vars into the JS bundle at build time, not runtime.
+      # Pass them here as build args so the builder stage can use them.
+      args:
+        VITE_API_BASE_URL: /api
+        VITE_AUTH_MODE: openclaw
+        VITE_APP_NAME: OpenClaw Command Center
+    container_name: openclaw
+    restart: unless-stopped
+
+    # Full host access — required for OpenClaw system-level control.
+    privileged: true
+    network_mode: host
+    pid: host
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /:/host
+      - openclaw_data:/app/data
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  openclaw_data:
