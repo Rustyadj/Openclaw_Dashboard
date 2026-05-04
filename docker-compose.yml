@@ -1,0 +1,23 @@
+version: '3.9'
+
+services:
+  openclaw-cash:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_APP_NAME: OpenClaw Command Center
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://srv1427612.hstgr.cloud:18789}
+        VITE_API_TIMEOUT_MS: ${VITE_API_TIMEOUT_MS:-10000}
+        VITE_AUTH_MODE: ${VITE_AUTH_MODE:-openclaw}
+        VITE_DEFAULT_MODEL: openai-codex/gpt-5.5-oauth
+    image: openclaw-cash:latest
+    container_name: openclaw-cash
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      - VITE_DEFAULT_MODEL=openai-codex/gpt-5.5-oauth
+    labels:
+      - "com.openclaw.service=command-center"
+      - "com.openclaw.model=openai-codex/gpt-5.5-oauth"

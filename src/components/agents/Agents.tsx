@@ -121,7 +121,7 @@ export default function Agents() {
 function CreateAgentModal({ onClose, onCreate }: { onClose: () => void; onCreate: (agent: AgentRecord) => Promise<void> }) {
   const [name, setName] = useState('');
   const [type, setType] = useState<AgentRecord['type']>('Agent');
-  const [model, setModel] = useState('openai-codex/gpt-5.5');
+  const [model, setModel] = useState('openai-codex/gpt-5.5-oauth');
   const [summary, setSummary] = useState('');
   const [error, setError] = useState('');
   const valid = name.trim().length >= 2 && model.trim().length >= 3;

@@ -112,7 +112,7 @@ const initialMemory: MemoryEntry[] = [
 
 const initialSettings: SettingsState = {
   general: { displayName: 'Rusty', email: 'rusty@example.com', timezone: 'America/Chicago', gatewayUrl: 'http://127.0.0.1:18789', cluster: 'VPS Root', tokenAuth: '' },
-  models: { primary: 'openai-codex/gpt-5.5', fallback: 'claude-sonnet-4-6', reasoning: 'claude-opus-4-6', budget: 'openrouter/free', dailyBudget: '5.00', monthlyBudget: '150.00', apiKeys: {} },
+  models: { primary: 'openai-codex/gpt-5.5-oauth', fallback: 'claude-sonnet-4-6', reasoning: 'claude-opus-4-6', budget: 'openrouter/free', dailyBudget: '5.00', monthlyBudget: '150.00', apiKeys: {} },
   channels: { Telegram: { connected: true, route: 'Orchestrator' }, Discord: { connected: false, route: 'Orchestrator' } },
   notifications: { agentErrors: true, cronFailures: true, highCost: true, newMember: true, agentActivity: false, memoryCompact: false, weeklyReport: true, dailyBrief: true },
   appearance: { theme: 'light-glass', accentColor: '#00E6A8', fontSize: 'medium', sidebarCollapsed: false },

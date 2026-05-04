@@ -133,17 +133,20 @@ function ModelsSettings() {
         <ApiKeyField label="OpenRouter API Key" placeholder="sk-or-..." saved />
         <ApiKeyField label="Google AI / Gemini" placeholder="AIza..." saved />
         <ApiKeyField label="OpenAI API Key" placeholder="sk-..." />
+        <ApiKeyField label="OpenAI OAuth Token" placeholder="oauth2-..." />
         <ApiKeyField label="ElevenLabs API Key (Voice TTS)" placeholder="..." saved />
       </Section>
 
       <Section title="Default Model Routing">
         <Field label="Primary Model" hint="Used for most agent tasks">
-          <select style={inputStyle}>
-            <option>claude-sonnet-4-6</option>
-            <option>claude-opus-4-5</option>
-            <option>gemini-flash-3</option>
-            <option>deepseek-r1-0528</option>
-            <option>gpt-4o</option>
+          <select defaultValue="openai-codex/gpt-5.5-oauth" style={inputStyle}>
+            <option value="openai-codex/gpt-5.5-oauth">Codex gpt-5.5 (OAuth)</option>
+            <option value="openai-codex/gpt-5.5">Codex gpt-5.5 (API Key)</option>
+            <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
+            <option value="claude-opus-4-5">claude-opus-4-5</option>
+            <option value="gemini-flash-3">gemini-flash-3</option>
+            <option value="deepseek-r1-0528">deepseek-r1-0528</option>
+            <option value="gpt-4o">gpt-4o</option>
           </select>
         </Field>
         <Field label="Fallback Model" hint="Used when primary is rate-limited or unavailable">
